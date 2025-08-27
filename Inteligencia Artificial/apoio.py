@@ -1,3 +1,5 @@
+"""Módulo de apoio para o projeto de IA, mapeamento de obstáculos e direções"""
+
 class Obstaculos:
 
     OBSTACULOS =  [
