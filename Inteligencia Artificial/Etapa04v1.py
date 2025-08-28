@@ -425,7 +425,7 @@ class AgenteUtilidade:
 
 if __name__ == "__main__":
     agente = AgenteUtilidade(grid_size=11, inicio=(5, 1), fim=(5, 9))
-    path, custo = visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True)
+    path, custo = visualizar_tempo_real_utilidade(agente, step_delay=0.01, percorrer=True)
     print("Métricas:", agente.metricas(path, custo))
     if path:
         print("Ações:", agente.executar_acoes(path))

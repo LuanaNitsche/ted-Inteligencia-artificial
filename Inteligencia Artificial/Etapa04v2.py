@@ -341,7 +341,7 @@ if __name__ == "__main__":
         reveal_radius=3           
     )
 
-    sucesso = visualizar_tempo_real_etapa4(agente, step_delay=0.5)
+    sucesso = visualizar_tempo_real_etapa4(agente, step_delay=0.04)
 
     print("Parcial:", agente.metricas())
     print("Comparado ao ótimo:", agente.metricas_comparadas())
