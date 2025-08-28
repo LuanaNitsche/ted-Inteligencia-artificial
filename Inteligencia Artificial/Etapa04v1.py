@@ -82,44 +82,28 @@ def visualizar_tempo_real_utilidade_conhecida(
 
     return path, custo_total
 
-import numpy as np
-
 def terreno_figura_11x11() -> np.ndarray:
     """
-    Retorna a matriz 11x11 de custos igual à figura:
-    - 1 em todo o fundo (verde)
-    - 3 na “mancha” central (vermelho)
-    - 2 no anel/braços ao redor (amarelo)
+    Mapa 11×11 no formato da imagem:
+    - 1 em todo o fundo
+    - 2 no anel e braços laterais
+    - 3 no núcleo central
 
-    Observação:
-    Coordenadas são (x,y) 0-based; esta função retorna array indexado [y, x].
+    Índices: terreno[y, x]  (y = linha, x = coluna)
     """
-    n = 11
-    t = np.ones((n, n), dtype=int)
-
-    red = {
-        (4,4),(5,4),(6,4),
-        (3,5),(4,5),(5,5),(6,5),(7,5),
-        (4,6),(5,6),(6,6),
-        (5,3),(5,7),
-        (5,4),(5,6)
-    }
-
-    for (x,y) in red:
-        t[y, x] = 3
-
-    yellow = {
-        (3,4),(7,4),
-        (4,3),(6,3),
-        (4,7),(6,7),
-        (3,6),(7,6),
-        (5,2),(5,8),
-        (2,5),(8,5)
-    }
-    for (x,y) in yellow:
-        t[y, x] = 2
-
-    return t
+    return np.array([
+        [1,1,1,1,1,2,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,3,1,1,1,1,1],
+        [1,1,2,2,1,3,3,2,1,1,1],
+        [1,1,2,1,3,3,3,2,1,1,1],
+        [1,1,2,2,3,3,3,2,2,1,1],
+        [1,1,1,2,3,1,2,2,1,1,1],
+        [1,1,1,1,2,3,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1,1,1,1],
+    ], dtype=int)
 
 
 class AgenteUtilidade:
