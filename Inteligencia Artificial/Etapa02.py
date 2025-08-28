@@ -105,8 +105,6 @@ def visualizar_tempo_real(agente, step_delay=0.05, max_steps=100000, salvar_em=N
         plt.savefig(salvar_em, bbox_inches='tight')
     plt.show()
 
-
-
 class AgenteReativoSimples:
     """Agente reativo com memória para exploração sistemática de um grid.
 

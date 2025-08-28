@@ -106,17 +106,15 @@ class AgenteUtilidadePO:
                 yield nx, ny
 
     def _revelar_vizinhanca(self, p: Coord, incluir_atual=True, raio=1):
-        """Revela custos da célula atual e dos 4-vizinhos (raio=1)."""
         x0, y0 = p
-        if incluir_atual and self.known_costs[y0][x0] is None:
-            self.known_costs[y0][x0] = self.true_cost[y0][x0]
+        for y in range(max(0, y0 - raio), min(self.n, y0 + raio + 1)):
+            for x in range(max(0, x0 - raio), min(self.n, x0 + raio + 1)):
+                if abs(x - x0) + abs(y - y0) <= raio:
+                    if not incluir_atual and (x, y) == (x0, y0):
+                        continue
+                    if self.known_costs[y][x] is None:
+                        self.known_costs[y][x] = self.true_cost[y][x]
 
-        if raio <= 0:
-            return
-
-        for nx, ny in self._viz4(x0, y0):
-            if self.known_costs[ny][nx] is None:
-                self.known_costs[ny][nx] = self.true_cost[ny][nx]
 
     def _planning_cost(self, c: Optional[int]) -> float:
         """Custo usado pelo planejador: conhecido = custo real; desconhecido = custo neutro."""
@@ -129,35 +127,32 @@ class AgenteUtilidadePO:
         def h(x: int, y: int) -> float:
             return abs(x - gx) + abs(y - gy)
 
-        g: Dict[Coord, float] = {(sx, sy): 0.0}
-        bad: Dict[Coord, int]  = {(sx, sy): 0}  
-        came: Dict[Coord, Coord] = {}
-
-        open_heap: List[Tuple[float, int, Coord]] = [(h(sx, sy), 0, (sx, sy))]
+        g = {(sx, sy): 0.0}
+        came = {}
+        open_heap = [(h(sx, sy), (sx, sy))]
+        visited = set()
 
         while open_heap:
-            f, bval, (x, y) = heapq.heappop(open_heap)
+            f, (x, y) = heapq.heappop(open_heap)
+            if (x, y) in visited:
+                continue
+            visited.add((x, y))
+
             if (x, y) == (gx, gy):
                 path = [(x, y)]
                 while (x, y) != (sx, sy):
                     x, y = came[(x, y)]
                     path.append((x, y))
-                path.reverse()
-                return path
+                return list(reversed(path))
 
             for nx, ny in self._viz4(x, y):
                 c = self.known_costs[ny][nx]
                 step_cost = self._planning_cost(c)
                 ng = g[(x, y)] + step_cost
-                nb = bad[(x, y)] + (1 if c == 3 else 0)
-
-                prev_g = g.get((nx, ny), math.inf)
-                prev_b = bad.get((nx, ny), math.inf)
-                if (ng < prev_g) or (math.isclose(ng, prev_g) and nb < prev_b):
+                if ng < g.get((nx, ny), math.inf):
                     g[(nx, ny)] = ng
-                    bad[(nx, ny)] = nb
                     came[(nx, ny)] = (x, y)
-                    heapq.heappush(open_heap, (ng + h(nx, ny), nb, (nx, ny)))
+                    heapq.heappush(open_heap, (ng + h(nx, ny), (nx, ny)))
         return None
 
 
@@ -333,7 +328,6 @@ def visualizar_tempo_real_etapa4(agent: AgenteUtilidadePO, step_delay: float = 0
     return ok
 
 
-
 if __name__ == "__main__":
     n = 12
     cost_map = mapa_coracao(n)  
@@ -343,12 +337,11 @@ if __name__ == "__main__":
     agente = AgenteUtilidadePO(
         n, start, goal,
         cost_map=cost_map,
-        unknown_planning_cost=1.0, 
-        reveal_radius=1
+        unknown_planning_cost=2.0,  
+        reveal_radius=3           
     )
 
-
-    sucesso = visualizar_tempo_real_etapa4(agente, step_delay=0.04)
+    sucesso = visualizar_tempo_real_etapa4(agente, step_delay=0.5)
 
     print("Parcial:", agente.metricas())
     print("Comparado ao ótimo:", agente.metricas_comparadas())

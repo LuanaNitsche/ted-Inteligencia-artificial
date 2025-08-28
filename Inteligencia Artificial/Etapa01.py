@@ -46,7 +46,6 @@ def visualizar_tempo_real_etapa1(agente, *, step_delay=0.03, max_steps=10000, se
     Returns:
         None: A função apenas exibe a animação e não retorna valor.
     """
-    import matplotlib.pyplot as plt
 
     plt.ion()
     fig, ax = plt.subplots(figsize=(6, 6))
@@ -71,7 +70,7 @@ def visualizar_tempo_real_etapa1(agente, *, step_delay=0.03, max_steps=10000, se
     fig.canvas.draw()
     plt.pause(step_delay)
 
-    def on_step(step_idx, pos_before, direc, pos_after, paredes_tocadas):
+    def on_step(step_idx, pos_after, paredes_tocadas):
         """Callback interno para atualizar a cena a cada passo do agente.
 
         Resumo:
@@ -267,7 +266,7 @@ class AgenteReativoSimples:
 
             if on_step is not None:
                 try:
-                    on_step(steps, pos_antes, direcao, pos_depois, frozenset(self.perimeter_detected))
+                    on_step(steps, pos_depois, frozenset(self.perimeter_detected))
                 except Exception as e:
                     print(f"on_step error: {e}")
 

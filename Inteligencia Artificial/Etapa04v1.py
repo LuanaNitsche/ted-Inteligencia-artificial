@@ -52,25 +52,21 @@ def visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True, sal
     fig, ax = plt.subplots(figsize=(7, 7))
     n = agente.grid_size
 
-    # grade
     for i in range(n + 1):
         ax.plot([-.5, n-.5], [i-.5, i-.5], color="k", lw=0.5, alpha=0.4)
         ax.plot([i-.5, i-.5], [-.5, n-.5], color="k", lw=0.5, alpha=0.4)
 
-    # fundo com terrenos
     terrain = agente.terrain
-    cmap = ListedColormap(["#2ecc71", "#f1c40f", "#e74c3c"])  # 1, 2, 3
+    cmap = ListedColormap(["#2ecc71", "#f1c40f", "#e74c3c"]) 
     norm = BoundaryNorm([0.5, 1.5, 2.5, 3.5], cmap.N)
     ax.imshow(
         terrain, cmap=cmap, norm=norm, origin="upper",
         extent=[-0.5, n-0.5, n-0.5, -0.5]
     )
 
-    # marcadores de início/fim
     ax.scatter([agente.start[0]], [agente.start[1]], s=140, marker='s', c="white", edgecolors="k", label='Início')
     ax.scatter([agente.end[0]],   [agente.end[1]],   s=140, marker='^', c="white", edgecolors="k", label='Fim')
 
-    # elementos dinâmicos
     visited_sc  = ax.scatter([], [], s=20, marker='.', c="#34495e", label='Visitados')
     frontier_sc = ax.scatter([], [], s=40, marker='o', c="#e67e22", label='Fronteira')
     (path_ln,)  = ax.plot([], [], marker='o', lw=2, c="white", label='Caminho')
@@ -115,18 +111,15 @@ def visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True, sal
         Returns:
             None
         """
-        # visitados
         vx = [p[0] for p in visited_set]
         vy = [p[1] for p in visited_set]
         visited_sc.set_offsets(list(zip(vx, vy)) if vx else np.empty((0, 2)))
 
-        # fronteira (nós presentes no heap)
         fronteira = [item[1] for item in frontier_heap]
         fx = [p[0] for p in fronteira]
         fy = [p[1] for p in fronteira]
         frontier_sc.set_offsets(list(zip(fx, fy)) if fx else np.empty((0, 2)))
 
-        # caminho parcial (se já alcançou o fim)
         if agente.end in prev or agente.end == agente.start:
             path = agente._reconstruir(prev, agente.end)
             if path:
@@ -143,7 +136,6 @@ def visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True, sal
 
     path, custo = agente.dijkstra_realtime(on_step=on_step)
 
-    # anima percorrendo o caminho final
     if percorrer and path:
         for p in path:
             agent_sc.set_offsets([p])
@@ -234,11 +226,11 @@ class AgenteUtilidade:
             for x in range(n):
                 d = abs(x - cx) + abs(y - cy)
                 if d <= 1:
-                    t[y, x] = 3  # centro (mais caro)
+                    t[y, x] = 3 
                 elif d == 2 or d == 3:
-                    t[y, x] = 2  # anel
+                    t[y, x] = 2 
                 else:
-                    t[y, x] = 1  # periferia
+                    t[y, x] = 1 
         return t
 
     def _valida_no_grid(self, pos: Tuple[int,int]):
@@ -424,7 +416,7 @@ class AgenteUtilidade:
             dx, dy = x2 - x1, y2 - y1
             if   dx == 1 and dy == 0:  acoes.append('E')
             elif dx == -1 and dy == 0: acoes.append('O')
-            elif dx == 0 and dy == 1:  acoes.append('S')  # origem="upper": y cresce p/ baixo
+            elif dx == 0 and dy == 1:  acoes.append('S')  
             elif dx == 0 and dy == -1: acoes.append('N')
             else:
                 raise RuntimeError(f"Passo inválido: {(x1,y1)} -> {(x2,y2)}")
