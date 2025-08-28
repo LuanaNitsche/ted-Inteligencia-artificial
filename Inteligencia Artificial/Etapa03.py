@@ -480,7 +480,7 @@ if __name__ == "__main__":
     agente_obs = AgenteCaminho(
         grid_size=10,
         usar_obstaculos_fixos=True,
-        inicio=None, fim=None,
+        inicio=(0,0), fim=(7,6),
         seed=43,
         garantir_caminho=True
     )

@@ -338,7 +338,7 @@ if __name__ == "__main__":
         n, start, goal,
         cost_map=cost_map,
         unknown_planning_cost=2.0,  
-        reveal_radius=3           
+        reveal_radius=3          
     )
 
     sucesso = visualizar_tempo_real_etapa4(agente, step_delay=0.04)

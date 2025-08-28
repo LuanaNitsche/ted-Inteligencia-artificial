@@ -1,20 +1,3 @@
-"""
-Etapa 4 — Agente Baseado em Utilidade (Variação 1: completamente observável)
-
-Resumo:
-    O ambiente é um grid n×n com custos de terreno {1 (normal), 2 (arenoso), 3 (rochoso)}.
-    O agente deve, dado um início e um fim, encontrar o caminho de MENOR CUSTO TOTAL.
-    Nesta variação, TODO o mapa de custos é conhecido desde o início.
-
-    O algoritmo utilizado é Dijkstra (pesos não negativos), que minimiza a soma
-    dos custos de entrada em cada célula ao longo do caminho.
-
-Métricas:
-    - sucesso (bool): alcançou o destino?
-    - custo_total (float): soma dos custos das células no caminho encontrado.
-    - comprimento (int): número de passos no caminho (len(path)-1).
-"""
-
 import heapq
 from typing import Dict, List, Optional, Tuple
 
@@ -23,31 +6,18 @@ import numpy as np
 from matplotlib.colors import BoundaryNorm, ListedColormap
 
 
-def visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True, salvar_em=None):
-    """Anima a execução do Dijkstra em tempo real sobre o grid de custos.
-
-    Resumo:
-        Renderiza o grid colorido de acordo com o custo (1/2/3), marca início/fim,
-        e atualiza a cada iteração do Dijkstra os conjuntos de nós visitados,
-        a fronteira (fila de prioridade), e o caminho parcial até o momento.
-        Ao concluir, pode animar o deslocamento do agente ao longo do caminho ótimo.
-
-    Args:
-        agente (AgenteUtilidade):
-            Instância configurada com grid, início, fim e matriz de custos.
-        step_delay (float, opcional):
-            Pausa (em segundos) entre atualizações do gráfico. Padrão: 0.03.
-        percorrer (bool, opcional):
-            Se True, anima o agente percorrendo o caminho final encontrado. Padrão: True.
-        salvar_em (str | None, opcional):
-            Caminho para salvar a figura final. Se None, não salva.
-
-    Returns:
-        tuple[list[tuple[int,int]] | None, float]:
-            (path, custo_total), onde `path` é a lista de coordenadas (x,y)
-            do caminho ótimo, ou None se inalcançável; `custo_total` é o custo
-            acumulado calculado pelo Dijkstra (float; inf se sem caminho).
+def visualizar_tempo_real_utilidade_conhecida(
+    agente, step_delay=0.03, mostrar_valor=True, salvar_em=None
+):
     """
+    Anima a execução do agente quando o mapa é completamente conhecido.
+    Em vez de mostrar a expansão do Dijkstra, mostramos:
+      - Terreno (1/2/3)
+      - (Opcional) mapa de custo-ao-objetivo (função de valor)
+      - Movimento do agente seguindo a política ótima (greedy na utilidade)
+    """
+    agente.precompute_value_function()
+
     plt.ion()
     fig, ax = plt.subplots(figsize=(7, 7))
     n = agente.grid_size
@@ -57,140 +27,109 @@ def visualizar_tempo_real_utilidade(agente, step_delay=0.03, percorrer=True, sal
         ax.plot([i-.5, i-.5], [-.5, n-.5], color="k", lw=0.5, alpha=0.4)
 
     terrain = agente.terrain
-    cmap = ListedColormap(["#2ecc71", "#f1c40f", "#e74c3c"]) 
+    cmap = ListedColormap(["#2ecc71", "#f1c40f", "#e74c3c"])  
     norm = BoundaryNorm([0.5, 1.5, 2.5, 3.5], cmap.N)
     ax.imshow(
         terrain, cmap=cmap, norm=norm, origin="upper",
         extent=[-0.5, n-0.5, n-0.5, -0.5]
     )
 
+    if mostrar_valor and agente.dist_to_goal is not None:
+        d = agente.dist_to_goal.copy()
+        finites = np.isfinite(d)
+        if finites.any():
+            d_norm = np.zeros_like(d, dtype=float)
+            vals = d[finites]
+            lo, hi = vals.min(), vals.max()
+            if hi > lo:
+                d_norm[finites] = (d[finites] - lo) / (hi - lo)
+            ax.imshow(
+                d_norm, cmap="gray", alpha=0.35, origin="upper",
+                extent=[-0.5, n-0.5, n-0.5, -0.5]
+            )
+
     ax.scatter([agente.start[0]], [agente.start[1]], s=140, marker='s', c="white", edgecolors="k", label='Início')
     ax.scatter([agente.end[0]],   [agente.end[1]],   s=140, marker='^', c="white", edgecolors="k", label='Fim')
 
-    visited_sc  = ax.scatter([], [], s=20, marker='.', c="#34495e", label='Visitados')
-    frontier_sc = ax.scatter([], [], s=40, marker='o', c="#e67e22", label='Fronteira')
-    (path_ln,)  = ax.plot([], [], marker='o', lw=2, c="white", label='Caminho')
-    agent_sc    = ax.scatter([agente.start[0]], [agente.start[1]], s=150, marker='*', c="white", edgecolors="k", label='Agente')
+    (path_ln,) = ax.plot([], [], marker='o', lw=2, c="white", label='Caminho')
+    agent_sc = ax.scatter([agente.start[0]], [agente.start[1]], s=150, marker='*', c="white", edgecolors="k", label='Agente')
 
     ax.set_xlim(-0.5, n - 0.5)
     ax.set_ylim(-0.5, n - 0.5)
     ax.set_aspect('equal', adjustable='box')
     ax.invert_yaxis()
     ax.legend(loc='upper right')
-    ax.set_title("Dijkstra (menor custo) — inicializando...")
+    ax.set_title("Execução com mapa conhecido — planejando e iniciando...")
 
     fig.canvas.draw(); plt.pause(step_delay)
 
-    def on_step(evt: str,
-                node: Optional[Tuple[int, int]],
-                cost_so_far: Dict[Tuple[int,int], float],
-                prev: Dict[Tuple[int,int], Tuple[int,int]],
-                frontier_heap,
-                visited_set):
-        """Callback interno para atualizar a visualização a cada evento do Dijkstra.
+    path, custo_total = agente.executar_politica_otima()
 
-        Resumo:
-            Atualiza pontos visitados, fronteira (conteúdo atual do heap),
-            o caminho parcial (se já há predecessor até o fim) e o título
-            com contadores básicos. Quando termina, mostra o custo final.
-
-        Args:
-            evt (str):
-                Evento: "init", "visit", "enqueue", "done" ou "fail".
-            node (tuple[int,int] | None):
-                Nó atual do evento.
-            cost_so_far (dict[tuple[int,int], float]):
-                Distâncias acumuladas conhecidas até o momento (Dijkstra).
-            prev (dict[tuple[int,int], tuple[int,int]]):
-                Predecessores para reconstruir caminho.
-            frontier_heap (list[tuple[float, tuple[int,int]]]):
-                Conteúdo atual da fila de prioridade (heap).
-            visited_set (set[tuple[int,int]]):
-                Conjunto de nós já removidos do heap (visitados).
-
-        Returns:
-            None
-        """
-        vx = [p[0] for p in visited_set]
-        vy = [p[1] for p in visited_set]
-        visited_sc.set_offsets(list(zip(vx, vy)) if vx else np.empty((0, 2)))
-
-        fronteira = [item[1] for item in frontier_heap]
-        fx = [p[0] for p in fronteira]
-        fy = [p[1] for p in fronteira]
-        frontier_sc.set_offsets(list(zip(fx, fy)) if fx else np.empty((0, 2)))
-
-        if agente.end in prev or agente.end == agente.start:
-            path = agente._reconstruir(prev, agente.end)
-            if path:
-                px = [p[0] for p in path]; py = [p[1] for p in path]
-                path_ln.set_data(px, py)
-                agent_sc.set_offsets([path[-1]])
-
-        title = f"Dijkstra: evt={evt} | visitados={len(visited_set)} | fronteira={len(fronteira)}"
-        if evt == "done":
-            title += f" | custo_total={cost_so_far.get(agente.end, float('inf')):.1f}"
-            frontier_sc.set_offsets(np.empty((0, 2)))
-        ax.set_title(title)
+    xs, ys = [], []
+    for p in path:
+        xs.append(p[0]); ys.append(p[1])
+        path_ln.set_data(xs, ys)
+        agent_sc.set_offsets([p])
+        ax.set_title(f"Executando política ótima • pos={p} • custo_acum≈{agente.custo_acumulado(xs, ys):.1f}")
         plt.pause(step_delay)
 
-    path, custo = agente.dijkstra_realtime(on_step=on_step)
-
-    if percorrer and path:
-        for p in path:
-            agent_sc.set_offsets([p])
-            plt.pause(step_delay)
+    ax.set_title(f"Concluído • custo_total={custo_total:.1f} • passos={max(0, len(path)-1)}")
 
     plt.ioff()
     if salvar_em:
         plt.savefig(salvar_em, bbox_inches='tight')
     plt.show()
 
-    return path, custo
+    return path, custo_total
+
+import numpy as np
+
+def terreno_figura_11x11() -> np.ndarray:
+    """
+    Retorna a matriz 11x11 de custos igual à figura:
+    - 1 em todo o fundo (verde)
+    - 3 na “mancha” central (vermelho)
+    - 2 no anel/braços ao redor (amarelo)
+
+    Observação:
+    Coordenadas são (x,y) 0-based; esta função retorna array indexado [y, x].
+    """
+    n = 11
+    t = np.ones((n, n), dtype=int)
+
+    red = {
+        (4,4),(5,4),(6,4),
+        (3,5),(4,5),(5,5),(6,5),(7,5),
+        (4,6),(5,6),(6,6),
+        (5,3),(5,7),
+        (5,4),(5,6)
+    }
+
+    for (x,y) in red:
+        t[y, x] = 3
+
+    yellow = {
+        (3,4),(7,4),
+        (4,3),(6,3),
+        (4,7),(6,7),
+        (3,6),(7,6),
+        (5,2),(5,8),
+        (2,5),(8,5)
+    }
+    for (x,y) in yellow:
+        t[y, x] = 2
+
+    return t
 
 
 class AgenteUtilidade:
-    """Agente de utilidade em grid totalmente observável (custos conhecidos).
-
-    Resumo:
-        Mantém um grid n×n com custos inteiros {1,2,3}. Dado início e fim,
-        utiliza Dijkstra para obter o menor custo total de deslocamento,
-        onde o custo de cada passo é o custo da célula de destino.
-
-    Args:
-        grid_size (int):
-            Dimensão do grid (grid_size × grid_size).
-        inicio (tuple[int,int]):
-            Posição inicial (x, y).
-        fim (tuple[int,int]):
-            Posição destino (x, y).
-        terreno (numpy.ndarray | None, opcional):
-            Matriz (n, n) de custos {1,2,3}. Se None, gera um padrão radial
-            com centro mais caro.
-
-    Raises:
-        ValueError: Se `terreno` existir e não for (grid_size, grid_size),
-                    ou se início/fim estiverem fora do grid.
+    """
+    Mesmo cenário da sua Etapa 4 (custos 1/2/3), mas com comportamento adaptado
+    ao conhecimento completo do mapa: calcula custo-ao-objetivo (função de valor)
+    e segue a política ótima, sem "explorar" em tempo real.
     """
 
-    def __init__(self, grid_size: int, *,
-                 inicio: Tuple[int,int],
-                 fim: Tuple[int,int],
-                 terreno: Optional[np.ndarray] = None):
-        """
-        Resumo:
-            Inicializa o agente, valida início/fim e carrega (ou gera) a matriz
-            de custos do terreno.
-
-        Args:
-            grid_size (int): Tamanho do lado do grid.
-            inicio (tuple[int,int]): Coordenada inicial (x, y).
-            fim (tuple[int,int]): Coordenada final (x, y).
-            terreno (numpy.ndarray | None): Matriz de custos 1/2/3 ou None.
-
-        Returns:
-            None
-        """
+    def __init__(self, grid_size: int, *, inicio: Tuple[int,int], fim: Tuple[int,int], terreno: Optional[np.ndarray] = None):
         self.grid_size = grid_size
         self.start = inicio
         self.end = fim
@@ -205,185 +144,128 @@ class AgenteUtilidade:
         self._valida_no_grid(self.start)
         self._valida_no_grid(self.end)
 
+        self.dist_to_goal: Optional[np.ndarray] = None
+
     def _gera_terreno_central(self) -> np.ndarray:
-        """Gera um terreno com centro caro e periferia barata (1/2/3).
-
-        Resumo:
-            Cria uma matriz (n, n) com custo 1, exceto um miolo com custo 3
-            e um anel ao redor com custo 2, a partir da distância Manhattan
-            ao centro do grid.
-
-        Args:
-            None
-
-        Returns:
-            numpy.ndarray: Matriz (n, n) de inteiros {1,2,3}.
-        """
         n = self.grid_size
         t = np.ones((n, n), dtype=int)
         cx, cy = n//2, n//2
         for y in range(n):
             for x in range(n):
                 d = abs(x - cx) + abs(y - cy)
-                if d <= 1:
-                    t[y, x] = 3 
-                elif d == 2 or d == 3:
-                    t[y, x] = 2 
-                else:
-                    t[y, x] = 1 
+                if d <= 1:       t[y, x] = 3
+                elif d in (2, 3): t[y, x] = 2
+                else:            t[y, x] = 1
         return t
 
     def _valida_no_grid(self, pos: Tuple[int,int]):
-        """Valida se a posição está dentro do grid.
-
-        Args:
-            pos (tuple[int,int]): Coordenada (x, y) a validar.
-
-        Raises:
-            ValueError: Se (x, y) estiver fora [0, grid_size).
-
-        Returns:
-            None
-        """
         x, y = pos
         if not (0 <= x < self.grid_size and 0 <= y < self.grid_size):
             raise ValueError(f"Fora do grid: {pos}")
 
     def _vizinhos(self, x: int, y: int):
-        """Gera os 4-vizinhos dentro do grid.
-
-        Args:
-            x (int): Coordenada x.
-            y (int): Coordenada y.
-
-        Yields:
-            tuple[int,int]: Coordenadas (nx, ny) vizinhas válidas.
-        """
         for dx, dy in ((0,1),(0,-1),(1,0),(-1,0)):
             nx, ny = x+dx, y+dy
             if 0 <= nx < self.grid_size and 0 <= ny < self.grid_size:
                 yield nx, ny
 
     def _custo(self, nx: int, ny: int) -> int:
-        """Retorna o custo da célula de destino (nx, ny).
-
-        Args:
-            nx (int): Coordenada x do destino.
-            ny (int): Coordenada y do destino.
-
-        Returns:
-            int: Custo inteiro {1,2,3} daquela célula.
-        """
         return int(self.terrain[ny, nx])
 
-    def _reconstruir(self, prev: Dict[Tuple[int,int], Tuple[int,int]], alvo: Tuple[int,int]):
-        """Reconstrói o caminho do início até `alvo` a partir de `prev`.
-
-        Resumo:
-            Percorre o dicionário de predecessores para montar a lista de
-            coordenadas do caminho. Se não existir predecessor e `alvo` não
-            for o início, retorna None.
-
-        Args:
-            prev (dict[tuple[int,int], tuple[int,int]]): Predecessores.
-            alvo (tuple[int,int]): Nó final (x, y).
-
-        Returns:
-            list[tuple[int,int]] | None:
-                Caminho do início a `alvo` ou None, se não houver.
+    def precompute_value_function(self):
         """
-        if alvo not in prev and alvo != self.start:
-            return None
-        path = [alvo]
-        cur = alvo
-        while cur != self.start:
-            cur = prev[cur]
-            path.append(cur)
-        path.reverse()
-        return path
-
-    def dijkstra_realtime(self, on_step=None):
-        """Executa Dijkstra e aciona um callback para visualização/telemetria.
-
-        Resumo:
-            Calcula o caminho de menor custo (pesos não negativos) entre
-            `self.start` e `self.end`. A cada evento relevante, chama `on_step`
-            com estado atual (visitados, heap, distâncias, predecessores).
-
-        Args:
-            on_step (callable | None, opcional):
-                Callback com assinatura:
-                    on_step(evt: str,
-                            node: tuple[int,int] | None,
-                            cost_so_far: dict[(int,int), float],
-                            prev: dict[(int,int), (int,int)],
-                            frontier_heap: list[tuple[float, (int,int)]],
-                            visited_set: set[(int,int)])
-
-        Returns:
-            tuple[list[tuple[int,int]] | None, float]:
-                (path, custo_total). `path` é o caminho ótimo ou None,
-                `custo_total` é a distância final (inf se inalcançável).
+        Dijkstra reverso a partir do objetivo:
+        dist_to_goal[y, x] = custo mínimo para ir de (x,y) até self.end,
+        considerando o custo de ENTRAR nas células seguintes.
         """
-        start, goal = self.start, self.end
-        dist: Dict[Tuple[int,int], float] = {start: 0.0}
+        n = self.grid_size
+        INF = float("inf")
+        dist = np.full((n, n), INF, dtype=float)
         prev: Dict[Tuple[int,int], Tuple[int,int]] = {}
-        visited = set()
-        heap = [(0.0, start)]
 
-        if on_step:
-            on_step("init", start, dist, prev, list(heap), set(visited))
+        ex, ey = self.end
+        dist[ey, ex] = 0.0
+
+        heap: List[Tuple[float, Tuple[int,int]]] = [(0.0, (ex, ey))]
+        visited = set()
 
         while heap:
-            custo, node = heapq.heappop(heap)
-            if node in visited:
+            dcur, (x, y) = heapq.heappop(heap)
+            if (x, y) in visited:
                 continue
-            visited.add(node)
-
-            if node == goal:
-                if on_step:
-                    on_step("done", node, dist, prev, list(heap), set(visited))
-                path = self._reconstruir(prev, goal)
-                return path, dist.get(goal, float("inf"))
-
-            if on_step:
-                on_step("visit", node, dist, prev, list(heap), set(visited))
-
-            x, y = node
+            visited.add((x, y))
             for nx, ny in self._vizinhos(x, y):
-                step_cost = self._custo(nx, ny)
-                novo = custo + step_cost
-                if (nx, ny) not in dist or novo < dist[(nx, ny)]:
-                    dist[(nx, ny)] = novo
-                    prev[(nx, ny)] = node
-                    heapq.heappush(heap, (novo, (nx, ny)))
-                    if on_step:
-                        on_step("enqueue", (nx, ny), dist, prev, list(heap), set(visited))
+                new_cost = dcur + self._custo(x, y)
+                if new_cost < dist[ny, nx]:
+                    dist[ny, nx] = new_cost
+                    prev[(nx, ny)] = (x, y)
+                    heapq.heappush(heap, (new_cost, (nx, ny)))
 
-        if on_step:
-            on_step("fail", None, dist, prev, [], set(visited))
-        return None, float("inf")
+        self.dist_to_goal = dist
+
+    def melhor_vizinho_pela_utilidade(self, x: int, y: int) -> Optional[Tuple[int,int]]:
+        """
+        Dado (x,y), escolhe o vizinho n que minimiza:
+            custo_entrar(n) + dist_to_goal[n]
+        """
+        assert self.dist_to_goal is not None, "Chame precompute_value_function() antes."
+        best = None
+        best_cost = float("inf")
+        for nx, ny in self._vizinhos(x, y):
+            step = self._custo(nx, ny)
+            val = self.dist_to_goal[ny, nx]
+            if not np.isfinite(val):
+                continue
+            score = step + val
+            if score < best_cost:
+                best_cost = score
+                best = (nx, ny)
+        return best
+
+    def executar_politica_otima(self) -> Tuple[List[Tuple[int,int]], float]:
+        """
+        Segue a política greedy na utilidade usando dist_to_goal.
+        Retorna (path, custo_total).
+        """
+        if self.start == self.end:
+            return [self.start], 0.0
+
+        assert self.dist_to_goal is not None, "Chame precompute_value_function() antes."
+        if not np.isfinite(self.dist_to_goal[self.start[1], self.start[0]]):
+            return [], float("inf")
+
+        path = [self.start]
+        x, y = self.start
+        total = 0.0
+        seen = {(x, y)}  
+
+        for _ in range(self.grid_size * self.grid_size + 5):
+            nxt = self.melhor_vizinho_pela_utilidade(x, y)
+            if nxt is None:
+                break
+            nx, ny = nxt
+            total += self._custo(nx, ny)
+            path.append((nx, ny))
+            x, y = nx, ny
+            if (x, y) == self.end:
+                return path, total
+            if (x, y) in seen:
+                break
+            seen.add((x, y))
+
+        return [], float("inf")
+
+    def custo_acumulado(self, xs: List[int], ys: List[int]) -> float:
+        """Apoio à visualização: soma custos ao longo dos pontos acumulados."""
+        if not xs or not ys or len(xs) != len(ys):
+            return 0.0
+        total = 0.0
+        for i in range(1, len(xs)):
+            total += self._custo(xs[i], ys[i])
+        return total
 
     def metricas(self, path, custo_total):
-        """Calcula métricas do trajeto encontrado.
-
-        Resumo:
-            Retorna sucesso, custo_total e comprimento (nº de passos) do
-            caminho, caso exista.
-
-        Args:
-            path (list[tuple[int,int]] | None): Caminho retornado pelo Dijkstra.
-            custo_total (float): Custo acumulado (ou inf se sem caminho).
-
-        Returns:
-            dict:
-                {
-                    "sucesso": bool,
-                    "custo_total": float | None,
-                    "comprimento": int | None
-                }
-        """
-        sucesso = path is not None
+        sucesso = bool(path) and np.isfinite(custo_total)
         comprimento = (len(path) - 1) if sucesso else None
         return {
             "sucesso": sucesso,
@@ -392,23 +274,6 @@ class AgenteUtilidade:
         }
 
     def executar_acoes(self, path: List[Tuple[int,int]]):
-        """Converte um caminho em ações cardinais.
-
-        Resumo:
-            Para cada par de posições consecutivas, infere a ação entre
-            {'N','S','E','O'} assumindo movimentos 4-conectados.
-
-        Args:
-            path (list[tuple[int,int]]):
-                Lista de coordenadas (x, y) consecutivas do caminho.
-
-        Returns:
-            list[str]:
-                Sequência de ações. Vazio se path for None ou tiver < 2 posições.
-
-        Raises:
-            RuntimeError: Se detectar um salto não adjacente.
-        """
         if not path or len(path) < 2:
             return []
         acoes = []
@@ -424,8 +289,12 @@ class AgenteUtilidade:
 
 
 if __name__ == "__main__":
-    agente = AgenteUtilidade(grid_size=11, inicio=(5, 1), fim=(5, 9))
-    path, custo = visualizar_tempo_real_utilidade(agente, step_delay=0.01, percorrer=True)
+    terreno = terreno_figura_11x11()
+    agente = AgenteUtilidade(grid_size=11, inicio=(5, 1), fim=(5, 9), terreno=terreno)
+
+    path, custo = visualizar_tempo_real_utilidade_conhecida(
+        agente, step_delay=0.01, mostrar_valor=True
+    )
     print("Métricas:", agente.metricas(path, custo))
     if path:
         print("Ações:", agente.executar_acoes(path))
